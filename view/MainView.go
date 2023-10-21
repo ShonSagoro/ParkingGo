@@ -28,8 +28,9 @@ func (m *MainView) InitApp() {
 }
 
 func (m *MainView) DrawSceneMenu() {
-	title := canvas.NewText("Simulatior", color.RGBA{R: 100, G: 100, B: 100, A: 255})
+	title := canvas.NewText("Parking simulator", color.RGBA{R: 255, G: 255, B: 255, A: 255})
 	title.Resize(fyne.NewSize(20, 20))
+	titleContainer := container.NewCenter(title)
 
 	start := widget.NewButton("Start Simulation", m.StartParkingSimulation)
 
@@ -38,7 +39,7 @@ func (m *MainView) DrawSceneMenu() {
 	exit := widget.NewButton("Exit", m.ExitGame)
 
 	container_center := container.NewVBox(
-		title,
+		titleContainer,
 		layout.NewSpacer(),
 		start,
 		credits,
