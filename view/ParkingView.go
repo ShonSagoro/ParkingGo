@@ -56,7 +56,11 @@ func (p *ParkingView) MakeEnterAndExitStation() *fyne.Container {
 }
 
 func (p *ParkingView) AddParkingLotEntrance() *fyne.Container {
-	return nil
+	EntraceContainer := container.New(layout.NewGridLayout(3))
+	EntraceContainer.Add(makeBorder())
+	EntraceContainer.Add(layout.NewSpacer())
+	EntraceContainer.Add(makeBorder())
+	return EntraceContainer
 }
 
 func addSpace(parkingContainer *fyne.Container) {
@@ -68,5 +72,13 @@ func addSpace(parkingContainer *fyne.Container) {
 func makeSquare() *canvas.Rectangle {
 	square := canvas.NewRectangle(Gray)
 	square.SetMinSize(fyne.NewSquareSize(float32(30)))
+	return square
+}
+
+func makeBorder() *canvas.Rectangle {
+	square := canvas.NewRectangle(Gray)
+	square.SetMinSize(fyne.NewSquareSize(float32(30)))
+	square.StrokeColor = color.RGBA{R: 30, G: 30, B: 30, A: 255}
+	square.StrokeWidth = float32(30)
 	return square
 }
