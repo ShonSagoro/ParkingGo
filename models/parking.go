@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"math"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -25,17 +26,19 @@ type Parking struct {
 	semRenderNewCarParking chan bool
 	semRenderNewCarEnter   chan bool
 	semRenderNewCarExit    chan bool
+	semRenderIDExit        chan int
 	semQuit                chan bool
 }
 
-// var semFullWaitStation chan bool
 var semHaveSpace chan int
 var semWait chan bool
+var semExitCar chan bool
+var mutexExit sync.Mutex
 
-func NewParking(sRNCW chan bool, sRNCP chan bool, sRNCEn chan bool, sRNCEx chan bool, sQ chan bool) *Parking {
-	// semFullWaitStation = make(chan bool)
+func NewParking(sRNCW chan bool, sRNCP chan bool, sRNCEn chan bool, sRNCEx chan bool, sICEx chan int, sQ chan bool) *Parking { // semFullWaitStation = make(chan bool)
 	semHaveSpace = make(chan int)
 	semWait = make(chan bool)
+	semExitCar = make(chan bool)
 	parking := &Parking{
 		entrace:                NewSpaceCar(),
 		exit:                   NewSpaceCar(),
@@ -43,6 +46,7 @@ func NewParking(sRNCW chan bool, sRNCP chan bool, sRNCEn chan bool, sRNCEx chan 
 		semRenderNewCarParking: sRNCP,
 		semRenderNewCarEnter:   sRNCEn,
 		semRenderNewCarExit:    sRNCEx,
+		semRenderIDExit:        sICEx,
 		semQuit:                sQ,
 	}
 	return parking
@@ -84,9 +88,44 @@ func (p *Parking) CarEntrace() {
 			p.PassToEntraceState()
 			if index != -1 {
 				p.parking[index] = p.entrace
-				go p.parking[index].StartCount()
+				p.entrace = NewSpaceCar()
+				go p.parking[index].StartCount(index)
+				p.semRenderNewCarEnter <- true
 				semWait <- true
 			}
+		}
+	}
+}
+
+func (p *Parking) CheckExitCar() {
+	for {
+		select {
+		case <-p.semQuit:
+			fmt.Printf("CarExit Close")
+			return
+		default:
+			if !WaitCarsIsEmpty() {
+				fmt.Printf("\n sacate \n")
+				semExitCar <- true
+			}
+		}
+	}
+}
+
+func (p *Parking) CarExit() {
+	for {
+		select {
+		case <-p.semQuit:
+			fmt.Printf("CarExit Close")
+			return
+		default:
+			<-semExitCar
+			fmt.Printf("\n saliendo \n")
+			car := PopWaitCars()
+			p.semRenderIDExit <- car.GetID()
+			p.parking[car.ID] = NewSpaceCar()
+			<-p.semRenderNewCarExit
+
 		}
 	}
 }
@@ -99,17 +138,13 @@ func (p *Parking) GenerateCars() {
 			fmt.Printf("GenerateCars Close")
 			return
 		default:
-			fmt.Printf("Nuevo")
 			interarrivalTime := -math.Log(1-rand.Float64()) / lambda
 			time.Sleep(time.Duration(interarrivalTime * float64(time.Second)))
 			if len(p.waitCars) < maxWait {
-				car := NewCar(int64(i))
+				car := NewCar(i)
 				i++
 				p.waitCars = append(p.waitCars, car)
-				fmt.Printf("Renderizalo")
 				p.semRenderNewCarWait <- true
-			} else {
-				i = 0
 			}
 		}
 	}
@@ -120,14 +155,13 @@ func (p *Parking) PassToEntraceState() {
 		p.entrace = p.waitCars[0]
 		p.waitCars = p.waitCars[1:]
 		p.semRenderNewCarEnter <- true
-		time.Sleep(3 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 }
 
 func (p *Parking) SearchSpace() int {
 	for s := range p.parking {
 		if p.parking[s].GetID() == -1 {
-			fmt.Printf("\n %d\n", s)
 			return s
 		}
 	}

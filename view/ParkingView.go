@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"parking/models"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -17,6 +18,7 @@ var semRenderNewCarWait chan bool
 var semRenderNewCarParking chan bool
 var semRenderNewCarEnter chan bool
 var semRenderNewCarExit chan bool
+var semRenderIDExit chan int
 var semQuit chan bool
 
 const maxWait int = 10
@@ -28,6 +30,7 @@ type (
 		carsParking          [20]*CarPark
 		entrace              *canvas.Rectangle
 		exit                 *canvas.Rectangle
+		out                  *canvas.Rectangle
 	}
 
 	CarPark struct {
@@ -47,8 +50,9 @@ func NewParkingView(window fyne.Window) *ParkingView {
 	semRenderNewCarParking = make(chan bool)
 	semRenderNewCarEnter = make(chan bool)
 	semRenderNewCarExit = make(chan bool)
+	semRenderIDExit = make(chan int)
 
-	parking = models.NewParking(semRenderNewCarWait, semRenderNewCarParking, semRenderNewCarEnter, semRenderNewCarExit, semQuit)
+	parking = models.NewParking(semRenderNewCarWait, semRenderNewCarParking, semRenderNewCarEnter, semRenderNewCarExit, semRenderIDExit, semQuit)
 
 	parkingView.MakeScene()
 	parkingView.StartSimulation()
@@ -142,7 +146,8 @@ func (p *ParkingView) MakeWaitStation() *fyne.Container {
 }
 
 func (p *ParkingView) MakeExitStation() *fyne.Container {
-	return container.NewCenter(makeSquare())
+	p.out = makeSquare()
+	return container.NewCenter(p.out)
 }
 
 func (p *ParkingView) MakeEnterAndExitStation() *fyne.Container {
@@ -181,7 +186,6 @@ func (p *ParkingView) RenderNewCarStation() {
 		case <-semQuit:
 			return
 		default:
-			fmt.Printf("Renderizando")
 			<-semRenderNewCarWait
 			waitCars := parking.GetWaitCars()
 			for i := len(waitCars) - 1; i >= 0; i-- {
@@ -191,7 +195,6 @@ func (p *ParkingView) RenderNewCarStation() {
 				}
 			}
 			p.window.Content().Refresh()
-			fmt.Printf("listo")
 		}
 	}
 }
@@ -202,7 +205,6 @@ func (p *ParkingView) RenderParkCar() {
 		case <-semQuit:
 			return
 		default:
-			fmt.Printf("Aparcando carro")
 			<-semRenderNewCarParking
 			parkingArray := parking.GetParking()
 			for i := range parkingArray {
@@ -211,7 +213,6 @@ func (p *ParkingView) RenderParkCar() {
 				p.carsParking[i].text.Color = Gray
 			}
 			p.window.Content().Refresh()
-			fmt.Printf("Aparcado")
 		}
 	}
 }
@@ -222,11 +223,34 @@ func (p *ParkingView) RenderEnterCar() {
 		case <-semQuit:
 			return
 		default:
-			fmt.Printf("Entrando carro")
 			<-semRenderNewCarEnter
 			p.entrace.FillColor = parking.GetEntraceCar().GetRectangle().FillColor
 			p.window.Content().Refresh()
-			fmt.Printf("\nCarrazo\n")
+		}
+	}
+}
+func (p *ParkingView) RenderExitCar() {
+	for {
+		select {
+		case <-semQuit:
+			return
+		default:
+			fmt.Printf("Saliendo carro")
+			id := <-semRenderIDExit
+
+			p.exit.FillColor = p.carsParking[id].rectangle.FillColor
+			p.carsParking[id].rectangle.FillColor = Gray
+			p.carsParking[id].text.Text = fmt.Sprintf("%d", 0)
+			p.carsParking[id].text.Color = color.RGBA{R: 255, G: 255, B: 255, A: 255}
+			time.Sleep(3 * time.Second)
+			p.out.FillColor = p.exit.FillColor
+			p.exit.FillColor = Gray
+			time.Sleep(3 * time.Second)
+			p.out.FillColor = Gray
+
+			p.window.Content().Refresh()
+			fmt.Printf("\nAdios popo\n")
+			semRenderNewCarExit <- true
 		}
 	}
 }
@@ -235,9 +259,12 @@ func (p *ParkingView) StartSimulation() {
 	go parking.GenerateCars()
 	go parking.CarEntrace()
 	go parking.CheckParking()
+	go parking.CheckExitCar()
+	go parking.CarExit()
 	go p.RenderNewCarStation()
 	go p.RenderParkCar()
 	go p.RenderEnterCar()
+	go p.RenderExitCar()
 }
 
 func addSpace(parkingContainer *fyne.Container) {

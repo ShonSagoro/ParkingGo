@@ -10,7 +10,7 @@ import (
 )
 
 type Car struct {
-	ID         int64
+	ID         int
 	rectangule *canvas.Rectangle
 	time       int
 	color      color.Color
@@ -40,7 +40,7 @@ func NewSpaceCar() *Car {
 	return car
 }
 
-func NewCar(id int64) *Car {
+func NewCar(id int) *Car {
 	rangR := rand.Intn(255-130) + 130
 	rangG := rand.Intn(255-130) + 130
 	rangB := rand.Intn(255-130) + 130
@@ -51,7 +51,7 @@ func NewCar(id int64) *Car {
 	rectangule.SetMinSize(fyne.NewSquareSize(float32(30)))
 
 	car := &Car{
-		ID:         int64(id),
+		ID:         id,
 		rectangule: rectangule,
 		time:       time,
 		color:      colorRectangle,
@@ -60,11 +60,12 @@ func NewCar(id int64) *Car {
 	return car
 }
 
-func (c *Car) StartCount() {
+func (c *Car) StartCount(id int) {
 	for {
 		c.time--
 		time.Sleep(1 * time.Second)
 		if c.time == 0 {
+			c.ID = id
 			exitCars = append(exitCars, c)
 			return
 		}
@@ -79,12 +80,17 @@ func (c *Car) GetTime() int {
 	return c.time
 }
 
-func (c *Car) GetID() int64 {
+func (c *Car) GetID() int {
 	return c.ID
 }
 
 func GetWaitCars() []*Car {
 	return exitCars
+}
+func PopWaitCars() *Car {
+	car := exitCars[0]
+	exitCars = exitCars[:1]
+	return car
 }
 
 func WaitCarsIsEmpty() bool {
