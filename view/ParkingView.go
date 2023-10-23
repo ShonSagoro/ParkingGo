@@ -13,54 +13,77 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-var semNewCar chan bool
-var semFullWaitStation chan bool
-var semHaveSpace chan bool
-var semWait chan bool
+var semRenderNewCarWait chan bool
+var semRenderNewCarParking chan bool
+var semRenderNewCarEnter chan bool
+var semRenderNewCarExit chan bool
+var semQuit chan bool
 
-type ParkingView struct {
-	window           fyne.Window
-	waitParkingArray *fyne.Container
-	parkingArray     [20]*models.Car
-}
+const maxWait int = 10
+
+type (
+	ParkingView struct {
+		window               fyne.Window
+		waitRectangleStation [maxWait]*canvas.Rectangle
+		carsParking          [20]*CarPark
+		entrace              *canvas.Rectangle
+		exit                 *canvas.Rectangle
+	}
+
+	CarPark struct {
+		text      *canvas.Text
+		rectangle *canvas.Rectangle
+	}
+)
 
 var Gray = color.RGBA{R: 30, G: 30, B: 30, A: 255}
 
 var parking *models.Parking
 
 func NewParkingView(window fyne.Window) *ParkingView {
-	parkingView := &ParkingView{window: window, waitParkingArray: container.New(nil)}
+	parkingView := &ParkingView{window: window}
 
-	semNewCar = make(chan bool)
-	semFullWaitStation = make(chan bool)
-	semHaveSpace = make(chan bool)
-	semWait = make(chan bool)
+	semRenderNewCarWait = make(chan bool)
+	semRenderNewCarParking = make(chan bool)
+	semRenderNewCarEnter = make(chan bool)
+	semRenderNewCarExit = make(chan bool)
 
-	parking = models.NewParking(semNewCar, semFullWaitStation, semHaveSpace, semWait)
+	parking = models.NewParking(semRenderNewCarWait, semRenderNewCarParking, semRenderNewCarEnter, semRenderNewCarExit, semQuit)
 
-	parkingView.RenderScene()
+	parkingView.MakeScene()
 	parkingView.StartSimulation()
 
 	return parkingView
 }
+func NewParkCar(text *canvas.Text, rectangle *canvas.Rectangle) *CarPark {
+	return &CarPark{
+		text:      text,
+		rectangle: rectangle,
+	}
+}
 
-func (p *ParkingView) RenderScene() {
+func (p *ParkingView) MakeScene() {
 
 	containerParkingView := container.New(layout.NewVBoxLayout())
 	containerParkingOut := container.New(layout.NewHBoxLayout())
 	containerButtons := container.New(layout.NewHBoxLayout())
 
-	restart := widget.NewButton("Restart Simulation", nil)
+	restart := widget.NewButton("Restart Simulation", func() {
+		dialog.ShowConfirm("Salir", "¿Desea Reiniciar la aplicación?", func(response bool) {
+			if response {
+				p.RestartSimulation()
+			} else {
+				fmt.Println("No")
+			}
+		}, p.window)
+	})
+
 	exit := widget.NewButton("Menu Exit",
 		func() {
 			dialog.ShowConfirm("Salir", "¿Desea salir de la aplicación?", func(response bool) {
 				if response {
 					p.BackToMenu()
 				} else {
-					close(semNewCar)
-					close(semFullWaitStation)
-					close(semHaveSpace)
-					close(semWait)
 					fmt.Println("No")
 				}
 			}, p.window)
@@ -70,7 +93,7 @@ func (p *ParkingView) RenderScene() {
 	containerButtons.Add(restart)
 	containerButtons.Add(exit)
 
-	containerParkingOut.Add(p.waitParkingArray)
+	containerParkingOut.Add(p.MakeWaitStation())
 	containerParkingOut.Add(layout.NewSpacer())
 	containerParkingOut.Add(p.MakeExitStation())
 	containerParkingOut.Add(layout.NewSpacer())
@@ -86,57 +109,50 @@ func (p *ParkingView) RenderScene() {
 
 	containerParkingView.Add(container.NewCenter(containerButtons))
 	p.window.SetContent(containerParkingView)
+	p.window.Resize(fyne.NewSize(300, 800))
 	p.window.CenterOnScreen()
 }
 
 func (p *ParkingView) MakeParking() *fyne.Container {
 	parkingContainer := container.New(layout.NewGridLayout(5))
 	parking.MakeParking()
-	fmt.Println("Mira hice algo xDDD")
 
-	p.parkingArray = parking.GetParking()
-	for i := 0; i < len(p.parkingArray); i++ {
+	parkingArray := parking.GetParking()
+	for i := 0; i < len(parkingArray); i++ {
 		if i == 10 {
 			addSpace(parkingContainer)
 		}
-
-		time := canvas.NewText(fmt.Sprintf("%d", p.parkingArray[i].GetTime()), color.RGBA{R: 255, G: 255, B: 255, A: 255})
-
-		parkingContainer.Add(container.NewCenter(p.parkingArray[i].GetRectangle(), time))
+		time := canvas.NewText(fmt.Sprintf("%d", parkingArray[i].GetTime()), color.RGBA{R: 255, G: 255, B: 255, A: 255})
+		car := NewParkCar(time, parkingArray[i].GetRectangle())
+		p.carsParking[i] = car
+		parkingContainer.Add(container.NewCenter(p.carsParking[i].rectangle, p.carsParking[i].text))
 	}
 	return container.NewCenter(parkingContainer)
 }
 
-func (p *ParkingView) RenderWaitStation() {
-	for {
-		fmt.Printf("Renderizando")
-		<-semNewCar
-		waitContainer := container.New(layout.NewGridLayout(5))
-		for i := len(parking.GetWaitCars()) - 1; i >= 0; i-- {
-			car := parking.GetWaitCars()[i]
-			waitContainer.Add(car.GetRectangle())
-		}
-		p.waitParkingArray = waitContainer
-		p.RenderScene()
-		fmt.Printf("Ya")
+func (p *ParkingView) MakeWaitStation() *fyne.Container {
+	parkingContainer := container.New(layout.NewGridLayout(5))
+	for i := len(p.waitRectangleStation) - 1; i >= 0; i-- {
+		car := models.NewSpaceCar().GetRectangle()
+		p.waitRectangleStation[i] = car
+		p.waitRectangleStation[i].Hide()
+		parkingContainer.Add(p.waitRectangleStation[i])
 	}
+	return parkingContainer
 }
 
 func (p *ParkingView) MakeExitStation() *fyne.Container {
 	return container.NewCenter(makeSquare())
-
 }
 
 func (p *ParkingView) MakeEnterAndExitStation() *fyne.Container {
 	parkingContainer := container.New(layout.NewGridLayout(5))
 	parkingContainer.Add(layout.NewSpacer())
-	enterSquare := parking.GetEntraceCar().GetRectangle()
-	// enterSquare.Hide()
-	parkingContainer.Add(enterSquare)
+	p.entrace = parking.GetEntraceCar().GetRectangle()
+	parkingContainer.Add(p.entrace)
 	parkingContainer.Add(layout.NewSpacer())
-	exitSquare := parking.GetExitCar().GetRectangle()
-	// exitSquare.Hide()
-	parkingContainer.Add(exitSquare)
+	p.exit = parking.GetExitCar().GetRectangle()
+	parkingContainer.Add(p.exit)
 	parkingContainer.Add(layout.NewSpacer())
 	return container.NewCenter(parkingContainer)
 }
@@ -150,14 +166,78 @@ func (p *ParkingView) MakeParkingLotEntrance() *fyne.Container {
 }
 
 func (p *ParkingView) BackToMenu() {
+	close(semQuit)
 	NewMainView(p.window)
+}
+
+func (p *ParkingView) RestartSimulation() {
+	close(semQuit)
+	NewParkingView(p.window)
+}
+
+func (p *ParkingView) RenderNewCarStation() {
+	for {
+		select {
+		case <-semQuit:
+			return
+		default:
+			fmt.Printf("Renderizando")
+			<-semRenderNewCarWait
+			waitCars := parking.GetWaitCars()
+			for i := len(waitCars) - 1; i >= 0; i-- {
+				if waitCars[i].ID != -1 {
+					p.waitRectangleStation[i].Show()
+					p.waitRectangleStation[i].FillColor = waitCars[i].GetRectangle().FillColor
+				}
+			}
+			p.window.Content().Refresh()
+			fmt.Printf("listo")
+		}
+	}
+}
+
+func (p *ParkingView) RenderParkCar() {
+	for {
+		select {
+		case <-semQuit:
+			return
+		default:
+			fmt.Printf("Aparcando carro")
+			<-semRenderNewCarParking
+			parkingArray := parking.GetParking()
+			for i := range parkingArray {
+				p.carsParking[i].rectangle.FillColor = parkingArray[i].GetRectangle().FillColor
+				p.carsParking[i].text.Text = fmt.Sprintf("%d", parkingArray[i].GetTime())
+				p.carsParking[i].text.Color = Gray
+			}
+			p.window.Content().Refresh()
+			fmt.Printf("Aparcado")
+		}
+	}
+}
+
+func (p *ParkingView) RenderEnterCar() {
+	for {
+		select {
+		case <-semQuit:
+			return
+		default:
+			fmt.Printf("Entrando carro")
+			<-semRenderNewCarEnter
+			p.entrace.FillColor = parking.GetEntraceCar().GetRectangle().FillColor
+			p.window.Content().Refresh()
+			fmt.Printf("\nCarrazo\n")
+		}
+	}
 }
 
 func (p *ParkingView) StartSimulation() {
 	go parking.GenerateCars()
-	go p.RenderWaitStation()
-	go parking.CheckParking()
 	go parking.CarEntrace()
+	go parking.CheckParking()
+	go p.RenderNewCarStation()
+	go p.RenderParkCar()
+	go p.RenderEnterCar()
 }
 
 func addSpace(parkingContainer *fyne.Container) {
