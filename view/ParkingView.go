@@ -19,6 +19,7 @@ var semRenderNewCarParking chan bool
 var semRenderNewCarEnter chan bool
 var semRenderNewCarExit chan bool
 var semRenderIDExit chan int
+var senRenderTime chan int
 var semQuit chan bool
 
 const maxWait int = 10
@@ -50,9 +51,10 @@ func NewParkingView(window fyne.Window) *ParkingView {
 	semRenderNewCarParking = make(chan bool)
 	semRenderNewCarEnter = make(chan bool)
 	semRenderNewCarExit = make(chan bool)
+	senRenderTime = make(chan int)
 	semRenderIDExit = make(chan int)
 
-	parking = models.NewParking(semRenderNewCarWait, semRenderNewCarParking, semRenderNewCarEnter, semRenderNewCarExit, semRenderIDExit, semQuit)
+	parking = models.NewParking(semRenderNewCarWait, semRenderNewCarParking, semRenderNewCarEnter, semRenderNewCarExit, semRenderIDExit, senRenderTime, semQuit)
 
 	parkingView.MakeScene()
 	parkingView.StartSimulation()
@@ -216,6 +218,19 @@ func (p *ParkingView) RenderParkCar() {
 		}
 	}
 }
+func (p *ParkingView) RenderTimeCarPark() {
+	for {
+		select {
+		case <-semQuit:
+			return
+		default:
+			index := <-senRenderTime
+			parkingArray := parking.GetParking()
+			p.carsParking[index].text.Text = fmt.Sprintf("%d", parkingArray[index].GetTime())
+			p.window.Content().Refresh()
+		}
+	}
+}
 
 func (p *ParkingView) RenderEnterCar() {
 	for {
@@ -229,6 +244,7 @@ func (p *ParkingView) RenderEnterCar() {
 		}
 	}
 }
+
 func (p *ParkingView) RenderExitCar() {
 	for {
 		select {
@@ -240,16 +256,17 @@ func (p *ParkingView) RenderExitCar() {
 
 			p.exit.FillColor = p.carsParking[id].rectangle.FillColor
 			p.carsParking[id].rectangle.FillColor = Gray
-			p.carsParking[id].text.Text = fmt.Sprintf("%d", 0)
+			p.carsParking[id].text.Hide()
 			p.carsParking[id].text.Color = color.RGBA{R: 255, G: 255, B: 255, A: 255}
-			time.Sleep(3 * time.Second)
+
+			time.Sleep(1 * time.Second)
 			p.out.FillColor = p.exit.FillColor
 			p.exit.FillColor = Gray
-			time.Sleep(3 * time.Second)
+
+			time.Sleep(1 * time.Second)
 			p.out.FillColor = Gray
 
 			p.window.Content().Refresh()
-			fmt.Printf("\nAdios popo\n")
 			semRenderNewCarExit <- true
 		}
 	}
@@ -265,6 +282,7 @@ func (p *ParkingView) StartSimulation() {
 	go p.RenderParkCar()
 	go p.RenderEnterCar()
 	go p.RenderExitCar()
+	go p.RenderTimeCarPark()
 }
 
 func addSpace(parkingContainer *fyne.Container) {

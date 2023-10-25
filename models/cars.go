@@ -10,10 +10,11 @@ import (
 )
 
 type Car struct {
-	ID         int
-	rectangule *canvas.Rectangle
-	time       int
-	color      color.Color
+	ID            int
+	rectangule    *canvas.Rectangle
+	time          int
+	senRenderTime chan int
+	color         color.Color
 }
 
 const (
@@ -40,7 +41,7 @@ func NewSpaceCar() *Car {
 	return car
 }
 
-func NewCar(id int) *Car {
+func NewCar(id int, sRT chan int) *Car {
 	rangR := rand.Intn(255-130) + 130
 	rangG := rand.Intn(255-130) + 130
 	rangB := rand.Intn(255-130) + 130
@@ -51,10 +52,11 @@ func NewCar(id int) *Car {
 	rectangule.SetMinSize(fyne.NewSquareSize(float32(30)))
 
 	car := &Car{
-		ID:         id,
-		rectangule: rectangule,
-		time:       time,
-		color:      colorRectangle,
+		ID:            id,
+		rectangule:    rectangule,
+		time:          time,
+		senRenderTime: sRT,
+		color:         colorRectangle,
 	}
 
 	return car
@@ -63,12 +65,13 @@ func NewCar(id int) *Car {
 func (c *Car) StartCount(id int) {
 	for {
 		c.time--
-		time.Sleep(1 * time.Second)
+		c.senRenderTime <- id
 		if c.time == 0 {
 			c.ID = id
 			exitCars = append(exitCars, c)
 			return
 		}
+		time.Sleep(1 * time.Second)
 	}
 }
 
@@ -89,7 +92,9 @@ func GetWaitCars() []*Car {
 }
 func PopWaitCars() *Car {
 	car := exitCars[0]
-	exitCars = exitCars[:1]
+	if !WaitCarsIsEmpty() {
+		exitCars = exitCars[1:]
+	}
 	return car
 }
 

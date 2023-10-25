@@ -5,7 +5,6 @@ import (
 	"image/color"
 	"math"
 	"math/rand"
-	"sync"
 	"time"
 )
 
@@ -27,15 +26,23 @@ type Parking struct {
 	semRenderNewCarEnter   chan bool
 	semRenderNewCarExit    chan bool
 	semRenderIDExit        chan int
+	senRenderTime          chan int
 	semQuit                chan bool
 }
 
 var semHaveSpace chan int
 var semWait chan bool
 var semExitCar chan bool
-var mutexExit sync.Mutex
 
-func NewParking(sRNCW chan bool, sRNCP chan bool, sRNCEn chan bool, sRNCEx chan bool, sICEx chan int, sQ chan bool) *Parking { // semFullWaitStation = make(chan bool)
+func NewParking(
+	sRNCW chan bool,
+	sRNCP chan bool,
+	sRNCEn chan bool,
+	sRNCEx chan bool,
+	sICEx chan int,
+	sRT chan int,
+	sQ chan bool,
+) *Parking {
 	semHaveSpace = make(chan int)
 	semWait = make(chan bool)
 	semExitCar = make(chan bool)
@@ -47,6 +54,7 @@ func NewParking(sRNCW chan bool, sRNCP chan bool, sRNCEn chan bool, sRNCEx chan 
 		semRenderNewCarEnter:   sRNCEn,
 		semRenderNewCarExit:    sRNCEx,
 		semRenderIDExit:        sICEx,
+		senRenderTime:          sRT,
 		semQuit:                sQ,
 	}
 	return parking
@@ -120,9 +128,9 @@ func (p *Parking) CarExit() {
 			return
 		default:
 			<-semExitCar
-			fmt.Printf("\n saliendo \n")
 			car := PopWaitCars()
 			p.semRenderIDExit <- car.GetID()
+
 			p.parking[car.ID] = NewSpaceCar()
 			<-p.semRenderNewCarExit
 
@@ -131,7 +139,7 @@ func (p *Parking) CarExit() {
 }
 
 func (p *Parking) GenerateCars() {
-	i := 0
+	i := 20
 	for {
 		select {
 		case <-p.semQuit:
@@ -141,7 +149,7 @@ func (p *Parking) GenerateCars() {
 			interarrivalTime := -math.Log(1-rand.Float64()) / lambda
 			time.Sleep(time.Duration(interarrivalTime * float64(time.Second)))
 			if len(p.waitCars) < maxWait {
-				car := NewCar(i)
+				car := NewCar(i, p.senRenderTime)
 				i++
 				p.waitCars = append(p.waitCars, car)
 				p.semRenderNewCarWait <- true
@@ -182,17 +190,3 @@ func (p *Parking) GetExitCar() *Car {
 func (p *Parking) GetParking() [20]*Car {
 	return p.parking
 }
-
-// Funcion de entrada ->
-//	La encargada de sacar un carro de la cola <- otra funcion
-//  dejar que busque su espacio vacio <- otra funcion
-//	colocarse en ese espacio vacio
-//  Si hay mas autos esperando para entrar, esperar a que estos entren uno por uno.
-//  Avisar que ya no van a entrar porque el estacionamiento se lleno carros para que salgan los carros
-//	faltantes.
-
-// Funcion de salida ->
-// 	Sacar el carro
-//  Esperar a que salga (1 seg)
-//  Si hay mas autos esperando para salir, sacar uno por uno los carros.
-//  Avisar que ya no van a salir carros para que entren
