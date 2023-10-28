@@ -92,12 +92,12 @@ func GetWaitCars() []*Car {
 }
 func PopWaitCars() *Car {
 	car := exitCars[0]
-	if !WaitCarsIsEmpty() {
+	if !WaitExitCarsIsEmpty() {
 		exitCars = exitCars[1:]
 	}
 	return car
 }
 
-func WaitCarsIsEmpty() bool {
+func WaitExitCarsIsEmpty() bool {
 	return len(exitCars) == 0
 }

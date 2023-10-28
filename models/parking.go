@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"math"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -15,10 +16,11 @@ const (
 )
 
 const maxWait int = 10
+const N = 20
 
 type Parking struct {
 	waitCars               []*Car
-	parking                [20]*Car
+	parking                [N]*Car
 	entrace                *Car
 	exit                   *Car
 	semRenderNewCarWait    chan bool
@@ -32,7 +34,7 @@ type Parking struct {
 
 var semHaveSpace chan int
 var semWait chan bool
-var semExitCar chan bool
+var mutexExitEnter sync.Mutex
 
 func NewParking(
 	sRNCW chan bool,
@@ -45,7 +47,6 @@ func NewParking(
 ) *Parking {
 	semHaveSpace = make(chan int)
 	semWait = make(chan bool)
-	semExitCar = make(chan bool)
 	parking := &Parking{
 		entrace:                NewSpaceCar(),
 		exit:                   NewSpaceCar(),
@@ -62,8 +63,7 @@ func NewParking(
 
 func (p *Parking) MakeParking() {
 	for i := range p.parking {
-		carSpace := NewSpaceCar()
-		p.parking[i] = carSpace
+		p.parking[i] = NewSpaceCar()
 	}
 }
 
@@ -92,32 +92,23 @@ func (p *Parking) CarEntrace() {
 			fmt.Printf("CarEntrace Close")
 			return
 		default:
+			mutexExitEnter.Lock()
 			index := <-semHaveSpace
 			p.PassToEntraceState()
 			if index != -1 {
-				p.parking[index] = p.entrace
-				p.entrace = NewSpaceCar()
-				go p.parking[index].StartCount(index)
+				p.ParkingCar(index)
 				p.semRenderNewCarEnter <- true
 				semWait <- true
 			}
+			mutexExitEnter.Unlock()
 		}
 	}
 }
 
-func (p *Parking) CheckExitCar() {
-	for {
-		select {
-		case <-p.semQuit:
-			fmt.Printf("CarExit Close")
-			return
-		default:
-			if !WaitCarsIsEmpty() {
-				fmt.Printf("\n sacate \n")
-				semExitCar <- true
-			}
-		}
-	}
+func (p *Parking) ParkingCar(index int) {
+	p.parking[index] = p.entrace
+	p.entrace = NewSpaceCar()
+	go p.parking[index].StartCount(index)
 }
 
 func (p *Parking) CarExit() {
@@ -127,13 +118,15 @@ func (p *Parking) CarExit() {
 			fmt.Printf("CarExit Close")
 			return
 		default:
-			<-semExitCar
-			car := PopWaitCars()
-			p.semRenderIDExit <- car.GetID()
-
-			p.parking[car.ID] = NewSpaceCar()
-			<-p.semRenderNewCarExit
-
+			if !WaitExitCarsIsEmpty() {
+				mutexExitEnter.Lock()
+				fmt.Printf("Car EXIT")
+				car := PopWaitCars()
+				p.semRenderIDExit <- car.GetID()
+				p.parking[car.ID] = NewSpaceCar()
+				<-p.semRenderNewCarExit
+				mutexExitEnter.Unlock()
+			}
 		}
 	}
 }
@@ -176,9 +169,19 @@ func (p *Parking) SearchSpace() int {
 	return -1
 }
 
+func (p *Parking) IsFullParking() bool {
+	for i := range p.parking {
+		if p.parking[i].ID == -1 {
+			return false
+		}
+	}
+	return true
+}
+
 func (p *Parking) GetWaitCars() []*Car {
 	return p.waitCars
 }
+
 func (p *Parking) GetEntraceCar() *Car {
 	return p.entrace
 }

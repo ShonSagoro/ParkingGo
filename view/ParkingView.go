@@ -61,6 +61,7 @@ func NewParkingView(window fyne.Window) *ParkingView {
 
 	return parkingView
 }
+
 func NewParkCar(text *canvas.Text, rectangle *canvas.Rectangle) *CarPark {
 	return &CarPark{
 		text:      text,
@@ -172,16 +173,6 @@ func (p *ParkingView) MakeParkingLotEntrance() *fyne.Container {
 	return EntraceContainer
 }
 
-func (p *ParkingView) BackToMenu() {
-	close(semQuit)
-	NewMainView(p.window)
-}
-
-func (p *ParkingView) RestartSimulation() {
-	close(semQuit)
-	NewParkingView(p.window)
-}
-
 func (p *ParkingView) RenderNewCarStation() {
 	for {
 		select {
@@ -213,6 +204,7 @@ func (p *ParkingView) RenderParkCar() {
 				p.carsParking[i].rectangle.FillColor = parkingArray[i].GetRectangle().FillColor
 				p.carsParking[i].text.Text = fmt.Sprintf("%d", parkingArray[i].GetTime())
 				p.carsParking[i].text.Color = Gray
+				p.carsParking[i].text.Show()
 			}
 			p.window.Content().Refresh()
 		}
@@ -240,6 +232,7 @@ func (p *ParkingView) RenderEnterCar() {
 		default:
 			<-semRenderNewCarEnter
 			p.entrace.FillColor = parking.GetEntraceCar().GetRectangle().FillColor
+			fmt.Printf("Renderize")
 			p.window.Content().Refresh()
 		}
 	}
@@ -251,20 +244,23 @@ func (p *ParkingView) RenderExitCar() {
 		case <-semQuit:
 			return
 		default:
-			fmt.Printf("Saliendo carro")
 			id := <-semRenderIDExit
 
 			p.exit.FillColor = p.carsParking[id].rectangle.FillColor
 			p.carsParking[id].rectangle.FillColor = Gray
 			p.carsParking[id].text.Hide()
 			p.carsParking[id].text.Color = color.RGBA{R: 255, G: 255, B: 255, A: 255}
-
+			p.window.Content().Refresh()
 			time.Sleep(1 * time.Second)
+
 			p.out.FillColor = p.exit.FillColor
 			p.exit.FillColor = Gray
-
+			p.window.Content().Refresh()
 			time.Sleep(1 * time.Second)
+
 			p.out.FillColor = Gray
+			p.window.Content().Refresh()
+			time.Sleep(1 * time.Second)
 
 			p.window.Content().Refresh()
 			semRenderNewCarExit <- true
@@ -276,13 +272,22 @@ func (p *ParkingView) StartSimulation() {
 	go parking.GenerateCars()
 	go parking.CarEntrace()
 	go parking.CheckParking()
-	go parking.CheckExitCar()
 	go parking.CarExit()
 	go p.RenderNewCarStation()
 	go p.RenderParkCar()
 	go p.RenderEnterCar()
 	go p.RenderExitCar()
 	go p.RenderTimeCarPark()
+}
+
+func (p *ParkingView) BackToMenu() {
+	close(semQuit)
+	NewMainView(p.window)
+}
+
+func (p *ParkingView) RestartSimulation() {
+	close(semQuit)
+	NewParkingView(p.window)
 }
 
 func addSpace(parkingContainer *fyne.Container) {
