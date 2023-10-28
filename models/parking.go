@@ -111,7 +111,7 @@ func (p *Parking) ParkingCar(index int) {
 	go p.parking[index].StartCount(index)
 }
 
-func (p *Parking) CarExit() {
+func (p *Parking) OutCarToExit() {
 	for {
 		select {
 		case <-p.semQuit:
@@ -120,7 +120,6 @@ func (p *Parking) CarExit() {
 		default:
 			if !WaitExitCarsIsEmpty() {
 				mutexExitEnter.Lock()
-				fmt.Printf("Car EXIT")
 				car := PopWaitCars()
 				p.semRenderIDExit <- car.GetID()
 				p.parking[car.ID] = NewSpaceCar()
@@ -167,15 +166,6 @@ func (p *Parking) SearchSpace() int {
 		}
 	}
 	return -1
-}
-
-func (p *Parking) IsFullParking() bool {
-	for i := range p.parking {
-		if p.parking[i].ID == -1 {
-			return false
-		}
-	}
-	return true
 }
 
 func (p *Parking) GetWaitCars() []*Car {

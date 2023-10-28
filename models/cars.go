@@ -18,8 +18,8 @@ type Car struct {
 }
 
 const (
-	minDuration = 1
-	maxDuration = 5
+	minDuration = 30
+	maxDuration = 35
 )
 
 var (

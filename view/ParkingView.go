@@ -53,6 +53,7 @@ func NewParkingView(window fyne.Window) *ParkingView {
 	semRenderNewCarExit = make(chan bool)
 	senRenderTime = make(chan int)
 	semRenderIDExit = make(chan int)
+	semQuit = make(chan bool)
 
 	parking = models.NewParking(semRenderNewCarWait, semRenderNewCarParking, semRenderNewCarEnter, semRenderNewCarExit, semRenderIDExit, senRenderTime, semQuit)
 
@@ -130,6 +131,7 @@ func (p *ParkingView) MakeParking() *fyne.Container {
 			addSpace(parkingContainer)
 		}
 		time := canvas.NewText(fmt.Sprintf("%d", parkingArray[i].GetTime()), color.RGBA{R: 255, G: 255, B: 255, A: 255})
+		time.Hide()
 		car := NewParkCar(time, parkingArray[i].GetRectangle())
 		p.carsParking[i] = car
 		parkingContainer.Add(container.NewCenter(p.carsParking[i].rectangle, p.carsParking[i].text))
@@ -232,7 +234,6 @@ func (p *ParkingView) RenderEnterCar() {
 		default:
 			<-semRenderNewCarEnter
 			p.entrace.FillColor = parking.GetEntraceCar().GetRectangle().FillColor
-			fmt.Printf("Renderize")
 			p.window.Content().Refresh()
 		}
 	}
@@ -272,7 +273,7 @@ func (p *ParkingView) StartSimulation() {
 	go parking.GenerateCars()
 	go parking.CarEntrace()
 	go parking.CheckParking()
-	go parking.CarExit()
+	go parking.OutCarToExit()
 	go p.RenderNewCarStation()
 	go p.RenderParkCar()
 	go p.RenderEnterCar()
@@ -282,13 +283,33 @@ func (p *ParkingView) StartSimulation() {
 
 func (p *ParkingView) BackToMenu() {
 	close(semQuit)
+	p.CloseChannels()
 	NewMainView(p.window)
 }
 
 func (p *ParkingView) RestartSimulation() {
 	close(semQuit)
+	p.CloseChannels()
 	NewParkingView(p.window)
 }
+
+func (p *ParkingView) CloseChannels() {
+	close(semRenderNewCarWait)
+	close(semRenderNewCarParking)
+	close(semRenderNewCarEnter)
+	close(semRenderNewCarExit)
+	close(semRenderIDExit)
+	close(senRenderTime)
+
+}
+
+// var semRenderNewCarWait chan bool
+// var semRenderNewCarParking chan bool
+// var semRenderNewCarEnter chan bool
+// var semRenderNewCarExit chan bool
+// var semRenderIDExit chan int
+// var senRenderTime chan int
+// var semQuit chan bool
 
 func addSpace(parkingContainer *fyne.Container) {
 	for j := 0; j < 5; j++ {
