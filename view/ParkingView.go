@@ -300,16 +300,9 @@ func (p *ParkingView) CloseChannels() {
 	close(semRenderNewCarExit)
 	close(semRenderIDExit)
 	close(senRenderTime)
+	parking.CloseChannels()
 
 }
-
-// var semRenderNewCarWait chan bool
-// var semRenderNewCarParking chan bool
-// var semRenderNewCarEnter chan bool
-// var semRenderNewCarExit chan bool
-// var semRenderIDExit chan int
-// var senRenderTime chan int
-// var semQuit chan bool
 
 func addSpace(parkingContainer *fyne.Container) {
 	for j := 0; j < 5; j++ {

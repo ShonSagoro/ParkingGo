@@ -167,6 +167,10 @@ func (p *Parking) SearchSpace() int {
 	}
 	return -1
 }
+func (p *Parking) CloseChannels() {
+	close(semHaveSpace)
+	close(semWait)
+}
 
 func (p *Parking) GetWaitCars() []*Car {
 	return p.waitCars
