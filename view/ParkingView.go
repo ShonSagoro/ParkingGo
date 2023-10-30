@@ -23,12 +23,13 @@ var senRenderTime chan int
 var semQuit chan bool
 
 const maxWait int = 10
+const maxParking int = 20
 
 type (
 	ParkingView struct {
 		window               fyne.Window
 		waitRectangleStation [maxWait]*canvas.Rectangle
-		carsParking          [20]*CarPark
+		carsParking          [maxParking]*CarPark
 		entrace              *canvas.Rectangle
 		exit                 *canvas.Rectangle
 		out                  *canvas.Rectangle
@@ -56,7 +57,7 @@ func NewParkingView(window fyne.Window) *ParkingView {
 	semQuit = make(chan bool)
 
 	parking = models.NewParking(semRenderNewCarWait, semRenderNewCarParking, semRenderNewCarEnter, semRenderNewCarExit, semRenderIDExit, senRenderTime, semQuit)
-
+	parkingView.ClearParking()
 	parkingView.MakeScene()
 	parkingView.StartSimulation()
 
@@ -179,9 +180,9 @@ func (p *ParkingView) RenderNewCarStation() {
 	for {
 		select {
 		case <-semQuit:
+			fmt.Printf("RenderNewCarStation Close")
 			return
-		default:
-			<-semRenderNewCarWait
+		case <-semRenderNewCarWait:
 			waitCars := parking.GetWaitCars()
 			for i := len(waitCars) - 1; i >= 0; i-- {
 				if waitCars[i].ID != -1 {
@@ -198,9 +199,9 @@ func (p *ParkingView) RenderParkCar() {
 	for {
 		select {
 		case <-semQuit:
+			fmt.Printf("RenderParkCar Close")
 			return
-		default:
-			<-semRenderNewCarParking
+		case <-semRenderNewCarParking:
 			parkingArray := parking.GetParking()
 			for i := range parkingArray {
 				p.carsParking[i].rectangle.FillColor = parkingArray[i].GetRectangle().FillColor
@@ -216,9 +217,9 @@ func (p *ParkingView) RenderTimeCarPark() {
 	for {
 		select {
 		case <-semQuit:
+			fmt.Printf("RenderTimeCarPark Close")
 			return
-		default:
-			index := <-senRenderTime
+		case index := <-senRenderTime:
 			parkingArray := parking.GetParking()
 			p.carsParking[index].text.Text = fmt.Sprintf("%d", parkingArray[index].GetTime())
 			p.window.Content().Refresh()
@@ -230,9 +231,9 @@ func (p *ParkingView) RenderEnterCar() {
 	for {
 		select {
 		case <-semQuit:
+			fmt.Printf("RenderEnterCar Close")
 			return
-		default:
-			<-semRenderNewCarEnter
+		case <-semRenderNewCarEnter:
 			p.entrace.FillColor = parking.GetEntraceCar().GetRectangle().FillColor
 			p.window.Content().Refresh()
 		}
@@ -243,10 +244,9 @@ func (p *ParkingView) RenderExitCar() {
 	for {
 		select {
 		case <-semQuit:
+			fmt.Printf("RenderExitCar Close")
 			return
-		default:
-			id := <-semRenderIDExit
-
+		case id := <-semRenderIDExit:
 			p.exit.FillColor = p.carsParking[id].rectangle.FillColor
 			p.carsParking[id].rectangle.FillColor = Gray
 			p.carsParking[id].text.Hide()
@@ -261,17 +261,15 @@ func (p *ParkingView) RenderExitCar() {
 
 			p.out.FillColor = Gray
 			p.window.Content().Refresh()
-			time.Sleep(1 * time.Second)
-
-			p.window.Content().Refresh()
 			semRenderNewCarExit <- true
+			time.Sleep(1 * time.Second)
+			p.window.Content().Refresh()
 		}
 	}
 }
 
 func (p *ParkingView) StartSimulation() {
 	go parking.GenerateCars()
-	go parking.CarEntrace()
 	go parking.CheckParking()
 	go parking.OutCarToExit()
 	go p.RenderNewCarStation()
@@ -283,25 +281,19 @@ func (p *ParkingView) StartSimulation() {
 
 func (p *ParkingView) BackToMenu() {
 	close(semQuit)
-	p.CloseChannels()
 	NewMainView(p.window)
 }
 
 func (p *ParkingView) RestartSimulation() {
 	close(semQuit)
-	p.CloseChannels()
 	NewParkingView(p.window)
+	fmt.Print("TE CERRE")
 }
 
-func (p *ParkingView) CloseChannels() {
-	close(semRenderNewCarWait)
-	close(semRenderNewCarParking)
-	close(semRenderNewCarEnter)
-	close(semRenderNewCarExit)
-	close(semRenderIDExit)
-	close(senRenderTime)
-	parking.CloseChannels()
-
+func (p *ParkingView) ClearParking() {
+	for i := range p.carsParking {
+		p.carsParking[i] = nil
+	}
 }
 
 func addSpace(parkingContainer *fyne.Container) {

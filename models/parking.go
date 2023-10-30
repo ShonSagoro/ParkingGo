@@ -15,12 +15,12 @@ const (
 	lambda = 2.0
 )
 
-const maxWait int = 10
-const N = 20
+const MaxWait int = 10
+const MaxParking int = 20
 
 type Parking struct {
 	waitCars               []*Car
-	parking                [N]*Car
+	parking                [MaxParking]*Car
 	entrace                *Car
 	exit                   *Car
 	semRenderNewCarWait    chan bool
@@ -32,8 +32,6 @@ type Parking struct {
 	semQuit                chan bool
 }
 
-var semHaveSpace chan int
-var semWait chan bool
 var mutexExitEnter sync.Mutex
 
 func NewParking(
@@ -45,8 +43,6 @@ func NewParking(
 	sRT chan int,
 	sQ chan bool,
 ) *Parking {
-	semHaveSpace = make(chan int)
-	semWait = make(chan bool)
 	parking := &Parking{
 		entrace:                NewSpaceCar(),
 		exit:                   NewSpaceCar(),
@@ -58,6 +54,7 @@ func NewParking(
 		senRenderTime:          sRT,
 		semQuit:                sQ,
 	}
+	parking.ClearParking()
 	return parking
 }
 
@@ -75,33 +72,28 @@ func (p *Parking) CheckParking() {
 			return
 		default:
 			index := p.SearchSpace()
+
 			if index != -1 {
-				semHaveSpace <- index
-				<-semWait
+				fmt.Printf("ENTRE")
+				mutexExitEnter.Lock()
+				p.PassToEntraceState()
+				p.ParkingCar(index)
+				p.semRenderNewCarEnter <- true
 				p.semRenderNewCarParking <- true
+				mutexExitEnter.Unlock()
 			}
-			time.Sleep(time.Duration(1 * time.Second))
+			time.Sleep(1 * time.Second)
+
 		}
 	}
 }
 
-func (p *Parking) CarEntrace() {
-	for {
-		select {
-		case <-p.semQuit:
-			fmt.Printf("CarEntrace Close")
-			return
-		default:
-			mutexExitEnter.Lock()
-			index := <-semHaveSpace
-			p.PassToEntraceState()
-			if index != -1 {
-				p.ParkingCar(index)
-				p.semRenderNewCarEnter <- true
-				semWait <- true
-			}
-			mutexExitEnter.Unlock()
-		}
+func (p *Parking) PassToEntraceState() {
+	if len(p.waitCars) != 0 {
+		p.entrace = p.waitCars[0]
+		p.waitCars = p.waitCars[1:]
+		p.semRenderNewCarEnter <- true
+		time.Sleep(1 * time.Second)
 	}
 }
 
@@ -140,22 +132,13 @@ func (p *Parking) GenerateCars() {
 		default:
 			interarrivalTime := -math.Log(1-rand.Float64()) / lambda
 			time.Sleep(time.Duration(interarrivalTime * float64(time.Second)))
-			if len(p.waitCars) < maxWait {
-				car := NewCar(i, p.senRenderTime)
+			if len(p.waitCars) < MaxWait {
+				car := NewCar(i, p.senRenderTime, p.semQuit)
 				i++
 				p.waitCars = append(p.waitCars, car)
 				p.semRenderNewCarWait <- true
 			}
 		}
-	}
-}
-
-func (p *Parking) PassToEntraceState() {
-	if len(p.waitCars) != 0 {
-		p.entrace = p.waitCars[0]
-		p.waitCars = p.waitCars[1:]
-		p.semRenderNewCarEnter <- true
-		time.Sleep(1 * time.Second)
 	}
 }
 
@@ -166,10 +149,6 @@ func (p *Parking) SearchSpace() int {
 		}
 	}
 	return -1
-}
-func (p *Parking) CloseChannels() {
-	close(semHaveSpace)
-	close(semWait)
 }
 
 func (p *Parking) GetWaitCars() []*Car {
@@ -184,6 +163,12 @@ func (p *Parking) GetExitCar() *Car {
 	return p.exit
 }
 
-func (p *Parking) GetParking() [20]*Car {
+func (p *Parking) GetParking() [MaxParking]*Car {
 	return p.parking
+}
+
+func (p *Parking) ClearParking() {
+	for i := range p.parking {
+		p.parking[i] = nil
+	}
 }

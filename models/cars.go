@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"image/color"
 	"math/rand"
 	"time"
@@ -15,11 +16,12 @@ type Car struct {
 	time          int
 	senRenderTime chan int
 	color         color.Color
+	semQuit       chan bool
 }
 
 const (
-	minDuration = 30
-	maxDuration = 35
+	minDuration = 5
+	maxDuration = 7
 )
 
 var (
@@ -41,7 +43,7 @@ func NewSpaceCar() *Car {
 	return car
 }
 
-func NewCar(id int, sRT chan int) *Car {
+func NewCar(id int, sRT chan int, sQ chan bool) *Car {
 	rangR := rand.Intn(255-130) + 130
 	rangG := rand.Intn(255-130) + 130
 	rangB := rand.Intn(255-130) + 130
@@ -56,6 +58,7 @@ func NewCar(id int, sRT chan int) *Car {
 		rectangule:    rectangule,
 		time:          time,
 		senRenderTime: sRT,
+		semQuit:       sQ,
 		color:         colorRectangle,
 	}
 
@@ -64,14 +67,20 @@ func NewCar(id int, sRT chan int) *Car {
 
 func (c *Car) StartCount(id int) {
 	for {
-		c.time--
-		c.senRenderTime <- id
-		if c.time == 0 {
-			c.ID = id
-			exitCars = append(exitCars, c)
+		select {
+		case <-c.semQuit:
+			fmt.Printf("StartCount Close")
 			return
+		default:
+			c.time--
+			c.senRenderTime <- id
+			if c.time == 0 {
+				c.ID = id
+				exitCars = append(exitCars, c)
+				return
+			}
+			time.Sleep(1 * time.Second)
 		}
-		time.Sleep(1 * time.Second)
 	}
 }
 
