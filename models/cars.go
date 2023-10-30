@@ -33,7 +33,8 @@ func NewSpaceCar() *Car {
 
 	rectangule.SetMinSize(fyne.NewSquareSize(float32(30)))
 
-	text := canvas.NewText(fmt.Sprintf("%d", 0), White)
+	text := canvas.NewText(fmt.Sprintf("%d", 0), Black)
+	text.Hide()
 
 	car := &Car{
 		ID:         -1,
@@ -55,7 +56,8 @@ func NewCar(id int, sQ chan bool) *Car {
 	rectangule := canvas.NewRectangle(colorRectangle)
 	rectangule.SetMinSize(fyne.NewSquareSize(float32(30)))
 
-	text := canvas.NewText(fmt.Sprintf("%d", time), White)
+	text := canvas.NewText(fmt.Sprintf("%d", time), Black)
+	text.Hide()
 
 	car := &Car{
 		ID:         id,
@@ -75,16 +77,13 @@ func (c *Car) StartCount(id int) {
 			fmt.Printf("StartCount Close")
 			return
 		default:
-			c.time--
-			c.text.Text = fmt.Sprintf("%d", c.time)
-			c.text.Color = color.RGBA{R: 255, G: 255, B: 255, A: 255}
-
 			if c.time <= 0 {
 				c.ID = id
 				exitCars = append(exitCars, c)
 				return
 			}
-
+			c.time--
+			c.text.Text = fmt.Sprintf("%d", c.time)
 			time.Sleep(1 * time.Second)
 		}
 	}
@@ -92,6 +91,13 @@ func (c *Car) StartCount(id int) {
 
 func (c *Car) GetRectangle() *canvas.Rectangle {
 	return c.rectangule
+}
+func (c *Car) ReplaceData(car *Car) {
+	c.ID = car.ID
+	c.time = car.time
+	c.rectangule.FillColor = car.rectangule.FillColor
+	c.text.Text = car.text.Text
+	c.text.Color = car.text.Color
 }
 
 func (c *Car) GetText() *canvas.Text {

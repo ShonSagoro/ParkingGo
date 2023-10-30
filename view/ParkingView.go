@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"parking/models"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -158,11 +159,25 @@ func (p *ParkingView) RenderNewCarWaitStation() {
 	}
 }
 
+func (p *ParkingView) RenderUpdate() {
+	for {
+		select {
+		case <-semQuit:
+			fmt.Printf("RenderUpdate Close")
+			return
+		default:
+			p.window.Content().Refresh()
+			time.Sleep(1 * time.Second)
+		}
+	}
+}
+
 func (p *ParkingView) StartSimulation() {
 	go parking.GenerateCars()
-	go parking.CheckParking()
 	go parking.OutCarToExit()
+	go parking.CheckParking()
 	go p.RenderNewCarWaitStation()
+	go p.RenderUpdate()
 
 }
 
