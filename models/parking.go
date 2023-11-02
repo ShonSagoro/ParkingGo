@@ -17,7 +17,7 @@ var (
 
 const (
 	lambda         = 2.0
-	MaxWait    int = 10
+	MaxWait    int = 30
 	MaxParking int = 20
 )
 
@@ -138,10 +138,12 @@ func (p *Parking) OutCarToExit() {
 }
 
 func (p *Parking) MoveToExit(index int) {
-	p.exit.ReplaceData(p.parking[index])
-	p.parking[index].text.Hide()
-	p.parking[index].ReplaceData(NewSpaceCar())
-	time.Sleep(1 * time.Second)
+	if index < 20 {
+		p.exit.ReplaceData(p.parking[index])
+		p.parking[index].text.Hide()
+		p.parking[index].ReplaceData(NewSpaceCar())
+		time.Sleep(1 * time.Second)
+	}
 }
 
 func (p *Parking) MoveToOut() {
